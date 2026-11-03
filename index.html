@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>取調室のジレンマ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f12; --panel:#15181d; --panel-2:#1d2128; --line:#2c323b;
+  --ink:#ece8df; --ink-2:#a9adb3; --ink-3:#6f747c;
+  --amber:#f0b44a; --red:#e0574a; --teal:#5cc2c9; --ok:#6fd08c;
+  --mincho:'Shippori Mincho',serif; --gothic:'Zen Kaku Gothic New',system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--gothic);overflow:hidden}
+body{display:flex;flex-direction:column;height:100dvh}
+button{font:inherit;color:inherit;cursor:pointer}
+
+#stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}
+#stage canvas{display:block}
+#labels{position:absolute;inset:0;pointer-events:none}
+.lbl{position:absolute;left:0;top:0;white-space:nowrap;font-weight:700;font-size:clamp(12px,1.6vw,16px);
+  padding:4px 10px;border-radius:6px;background:rgba(10,12,15,.78);border:1px solid var(--line);transition:opacity .4s}
+.lbl.you{color:#9cc6f2;border-color:#3d5f86}
+.lbl.partner{color:#e9c08a;border-color:#7a5a30}
+.lbl.years{font-family:var(--mincho);font-size:clamp(15px,2.2vw,24px);color:#ffd2c8;border-color:#7a2a22}
+.lbl.years.free{color:#c9ffd5;border-color:#2f7a45}
+.lbl.wall{color:#ffb3aa;border-color:#7a2a22}
+
+/* 監視モニター風オーバーレイ */
+#monitor{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s}
+#monitor.on{opacity:1}
+#monitor::before{content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);mix-blend-mode:overlay}
+#monitor::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 120px 30px rgba(0,0,0,.75)}
+.mon-tl,.mon-tr,.mon-bl{position:absolute;font-family:ui-monospace,Menlo,monospace;font-size:clamp(11px,1.4vw,14px);letter-spacing:.08em;color:#cfe8d4;text-shadow:0 0 6px rgba(120,255,160,.5)}
+.mon-tl{top:12px;left:14px}.mon-tr{top:12px;right:14px}.mon-bl{bottom:10px;left:14px;color:#9aa}
+.rec{display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff3030;margin-right:6px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#caseno{position:absolute;top:44px;left:14px;font-family:var(--mincho);font-size:clamp(14px,2vw,20px);color:var(--amber);opacity:0;transition:opacity .5s}
+#caseno.on{opacity:1}
+
+/* 下部パネル（セリフ＋操作） */
+#panel{flex:0 0 auto;background:linear-gradient(to bottom,#14171c,#0f1115);border-top:1px solid var(--line);
+  padding:14px 16px calc(14px + env(safe-area-inset-bottom));min-height:150px}
+.inner{max-width:820px;margin:0 auto}
+#speaker{font-size:13px;font-weight:700;color:var(--amber);letter-spacing:.08em;min-height:1.2em;margin-bottom:4px}
+#text{font-size:clamp(15px,2vw,18px);line-height:1.75;min-height:3.5em;white-space:pre-wrap}
+#actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;justify-content:flex-end;min-height:46px}
+.btn{border:1px solid #4a515c;background:var(--panel-2);padding:11px 20px;border-radius:10px;font-weight:700;font-size:15px;transition:transform .08s,background .2s,border-color .2s}
+.btn:hover{border-color:#7b8592}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#1a1408}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink-2);font-weight:500}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* 選択ボタン */
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;margin-top:4px}
+.choice{border:2px solid #4a515c;background:#1b1f26;border-radius:14px;padding:14px 10px;text-align:center;transition:all .15s}
+.choice .big{display:block;font-family:var(--mincho);font-size:clamp(22px,4vw,30px);font-weight:800;letter-spacing:.2em}
+.choice .sub{display:block;font-size:12.5px;color:var(--ink-2);margin-top:4px}
+.choice.sel{border-color:var(--amber);background:#2a2316;box-shadow:0 0 0 3px rgba(240,180,74,.18)}
+.decide-row{display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px;margin-top:10px}
+.linkbtn{background:none;border:none;color:var(--ink-2);text-decoration:underline;font-size:13px;padding:6px 0}
+
+/* 全画面オーバーレイ */
+.screen{position:fixed;inset:0;z-index:20;display:none;overflow:auto;background:rgba(9,10,13,.94);backdrop-filter:blur(4px)}
+.screen.on{display:block}
+.sc-inner{max-width:760px;margin:0 auto;padding:max(28px,env(safe-area-inset-top)) 20px 60px}
+h1{font-family:var(--mincho);font-weight:800;font-size:clamp(32px,7vw,54px);letter-spacing:.12em;margin:18px 0 6px;line-height:1.2}
+h2{font-family:var(--mincho);font-weight:800;font-size:clamp(22px,4.4vw,30px);margin:6px 0 14px;letter-spacing:.06em}
+.kicker{color:var(--amber);font-weight:700;letter-spacing:.3em;font-size:12px}
+p{line-height:1.85;color:#d7d3ca}
+.small{font-size:13px;color:var(--ink-2)}
+.field{display:flex;flex-direction:column;gap:6px;margin:22px 0 8px}
+.field label{font-weight:700;font-size:14px}
+.field input{font:inherit;font-size:22px;letter-spacing:.12em;padding:12px 14px;border-radius:10px;border:1px solid #4a515c;background:#11141a;color:var(--ink);width:100%;max-width:340px}
+.field input:focus{outline:2px solid var(--amber);border-color:transparent}
+.err{color:#ff8f84;font-size:13px;min-height:1.2em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:14px 0}
+
+/* 刑期の表 */
+.matrix{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;font-size:14px;margin:8px 0}
+.matrix .hd{color:var(--ink-2);font-weight:700;text-align:center;padding:6px 4px;font-size:13px}
+.matrix .rh{color:var(--ink-2);font-weight:700;display:flex;align-items:center;justify-content:center;padding:4px 8px;writing-mode:horizontal-tb;font-size:13px;text-align:center}
+.cell{background:#1a1e25;border:1px solid var(--line);border-radius:10px;padding:10px 10px;display:flex;flex-direction:column;gap:6px}
+.who{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+.who b{min-width:3.2em;color:var(--ink-2);font-weight:500}
+.who .yr{font-family:var(--mincho);font-weight:800;font-size:17px;min-width:2.8em}
+.bar{display:flex;gap:2px;flex-wrap:nowrap}
+.bar i{display:block;width:8px;height:12px;border-radius:2px;background:#d8483c}
+.free{color:var(--ok)}
+.comp-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.comp-opts .btn{font-family:var(--mincho);font-size:20px;padding:14px 0}
+
+#mxover{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);width:min(600px,calc(100% - 20px));
+  background:rgba(13,15,19,.96);border:1px solid var(--line);border-radius:12px;padding:6px 10px;display:none;z-index:5}
+#mxover.on{display:block}
+/* 判決 */
+.verdict{display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:10px 0;opacity:0;transform:translateY(10px);transition:all .5s}
+.verdict.show{opacity:1;transform:none}
+.verdict img{width:72px;height:72px;border-radius:10px;background:#20252d}
+.vrow{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;align-items:center}
+.tag{display:inline-block;padding:1px 8px;border-radius:6px;font-weight:700;font-size:13px;border:1px solid #4a515c}
+.tag.c{color:#9fe0e4;border-color:#2f6c70}.tag.d{color:#ffb0a6;border-color:#7a2a22}
+.total{font-family:var(--mincho);font-size:clamp(20px,4vw,28px);margin:18px 0 6px}
+.status{display:flex;align-items:center;gap:8px;font-size:14px;margin:14px 0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink-3)}
+.dot.ok{background:var(--ok)}.dot.wait{background:var(--amber);animation:blink 1s steps(1) infinite}.dot.ng{background:var(--red)}
+
+/* 供述スタンプ */
+#stamp{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#stamp .seal{font-family:var(--mincho);font-weight:800;font-size:clamp(28px,7vw,56px);color:#e2463a;border:5px solid #e2463a;border-radius:10px;
+  padding:8px 22px;transform:rotate(-12deg) scale(2.4);opacity:0;letter-spacing:.2em;background:rgba(20,6,5,.55);text-align:center;line-height:1.25}
+#stamp .seal small{display:block;font-size:.38em;letter-spacing:.1em}
+#stamp.go .seal{animation:stamp .9s cubic-bezier(.2,1.6,.4,1) forwards}
+@keyframes stamp{0%{opacity:0;transform:rotate(-12deg) scale(2.4)}35%{opacity:1;transform:rotate(-12deg) scale(.95)}100%{opacity:1;transform:rotate(-12deg) scale(1)}}
+#fade{position:fixed;inset:0;background:#000;z-index:14;opacity:0;pointer-events:none;transition:opacity .7s}
+#fade.on{opacity:1}
+#mute{position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:30;background:rgba(15,17,21,.7);border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--ink-2)}
+#progress{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;opacity:0;transition:opacity .4s}
+#progress.on{opacity:1}
+#progress i{width:10px;height:10px;border-radius:50%;border:1px solid #6f747c}
+#progress i.done{background:#6f747c}#progress i.now{background:var(--amber);border-color:var(--amber)}
+/* 予想と理由 */
+#sc-reason .sc-inner{max-width:640px}
+.rs-head{display:flex;gap:14px;align-items:center;margin:10px 0 6px}
+.rs-head img{width:76px;height:76px;border-radius:12px;background:#20252d;flex:0 0 auto}
+.rs-name{font-family:var(--mincho);font-weight:800;font-size:22px}
+.q{margin:20px 0 8px;font-size:16px}
+#rs-expect .choice .big{font-size:22px}
+textarea{font:inherit;font-size:16px;line-height:1.6;width:100%;padding:12px 14px;border-radius:12px;border:1px solid #4a515c;background:#11141a;color:var(--ink);resize:vertical}
+textarea:focus{outline:2px solid var(--amber);border-color:transparent}
+.rs-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px}
+.rs-foot .ok{color:var(--ok)}
+/* 自分の理由の分類 */
+.myai{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0}
+.myai .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.myai .rsn{margin:6px 0;font-size:14.5px;line-height:1.7}
+.cat{display:inline-block;padding:1px 9px;border-radius:999px;font-size:12.5px;font-weight:700;background:#2a2f38;color:var(--ink)}
+.cat.main{background:var(--amber);color:#1a1408}
+.myai .cm{font-size:13.5px;color:#cfe0d4;margin-top:4px}
+@media (max-width:560px){
+  #panel{padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+  .matrix{font-size:12px;grid-template-columns:2.4em 1fr 1fr;gap:4px}.matrix .rh{padding:2px;font-size:11.5px}
+  .cell{padding:8px 6px}.who{gap:4px;font-size:11.5px}.who b{min-width:2.6em}.who .yr{font-size:14px;min-width:2.3em}
+  .bar{gap:1px}.bar i{width:4px;height:10px;border-radius:1px}
+  .comp-opts{grid-template-columns:repeat(2,1fr)}
+  .mon-tr{display:none}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="labels"></div>
+  <div id="monitor">
+    <div class="mon-tl"><span class="rec"></span>LIVE ／ 取調室B</div>
+    <div class="mon-tr" id="clock">--:--:--</div>
+    <div class="mon-bl">CAM-02　別室の様子（音声は届きません）</div>
+  </div>
+  <div id="caseno"></div>
+  <div id="progress"></div>
+  <div id="mxover"></div>
+</div>
+<div id="panel"><div class="inner">
+  <div id="speaker"></div>
+  <div id="text">読み込み中…</div>
+  <div id="actions"></div>
+</div></div>
+
+<button id="mute" type="button">🔊 音あり</button>
+<div id="fade"></div>
+<div id="stamp"><div class="seal"></div></div>
+
+<!-- タイトル -->
+<section class="screen on" id="sc-title"><div class="sc-inner">
+  <div class="kicker">授業ワーク ／ 囚人のジレンマ</div>
+  <h1>取調室の<br>ジレンマ</h1>
+  <p>あなたは、ある事件の共犯者として逮捕されました。<br>
+  これから、<b>いろいろな「相棒」</b>と、それぞれ<b>一度きり</b>の取引をします。</p>
+  <div class="field">
+    <label for="sid">学籍番号</label>
+    <input id="sid" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" placeholder="例：2024A123">
+    <div class="err" id="sid-err"></div>
+  </div>
+  <div class="field" style="margin-top:6px">
+    <label for="nick">ニックネーム <span class="small" style="font-weight:400">（結果ページで理由といっしょに表示されます）</span></label>
+    <input id="nick" autocomplete="off" spellcheck="false" maxlength="12" placeholder="例：くまさん" style="letter-spacing:.04em">
+    <div class="err" id="nick-err"></div>
+  </div>
+  <p class="small">学籍番号は参加点をつけるためだけに使い、ほかの人には見えません。記録されるのは、あなたの選択・予想・理由・考えた時間・端末の種類です。書いた理由はニックネームといっしょにクラスの結果ページに出て、AIが考え方の種類を分類します。正解・不正解はありません。思ったとおりに選んでください。<br>所要時間：約10〜15分。音が出ます（右上で消せます）。</p>
+  <div style="margin-top:22px"><button class="btn primary" id="start" style="font-size:18px;padding:14px 34px">はじめる</button></div>
+</div></section>
+
+<!-- 理解度チェック -->
+<section class="screen" id="sc-comp"><div class="sc-inner">
+  <div class="kicker">確認</div>
+  <h2>ルールのおさらい</h2>
+  <div class="card" id="matrix-comp"></div>
+  <p style="margin-top:22px"><b>問題：</b>相棒が<b>黙秘</b>し、あなたが<b>自白</b>した場合、<br>あなたの刑期は何年？</p>
+  <div class="comp-opts" id="comp-opts"></div>
+  <div id="comp-fb" class="card" style="display:none"></div>
+</div></section>
+
+<!-- 予想と理由 -->
+<section class="screen" id="sc-reason"><div class="sc-inner">
+  <div class="kicker" id="rs-kicker">供述調書</div>
+  <div class="rs-head"><img id="rs-img" alt=""><div><div id="rs-name" class="rs-name"></div><div class="small">に対して、あなたは <b id="rs-choice"></b> を選びました。</div></div></div>
+  <div id="rs-expect-box">
+    <p class="q"><b>Q1.</b> 相棒は、どうすると思いますか？</p>
+    <div class="choices" id="rs-expect">
+      <button class="choice" data-k="silent"><span class="big">黙 秘</span><span class="sub">相棒は黙秘すると思う</span></button>
+      <button class="choice" data-k="confess"><span class="big">自 白</span><span class="sub">相棒は自白すると思う</span></button>
+    </div>
+  </div>
+  <p class="q"><b id="rs-q2no">Q2.</b> なぜ、<span id="rs-choice2"></span>を選びましたか？ <span class="small">（<span id="rs-min"></span>文字以上）</span></p>
+  <textarea id="rs-text" rows="4" maxlength="400" placeholder="この相棒だから／刑期を考えて／なんとなく、でもかまいません。思ったことをそのまま書いてください。"></textarea>
+  <div class="rs-foot"><span class="small" id="rs-count">0文字</span><button class="btn primary" id="rs-send" disabled>調書に書く ▶</button></div>
+</div></section>
+
+<!-- 判決・おわり -->
+<section class="screen" id="sc-end"><div class="sc-inner">
+  <div class="kicker" id="end-kicker">判決</div>
+  <h2 id="end-title">すべての取引が終わりました</h2>
+  <p id="end-lead"></p>
+  <div id="verdicts"></div>
+  <div class="total" id="total"></div>
+  <div class="card">
+    <div class="status"><span class="dot" id="send-dot"></span><span id="send-msg">記録を送信しています…</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="resend" style="display:none">もう一度送信する</button>
+      <button class="btn ghost" id="mycsv">自分の記録をCSVで保存</button>
+    </div>
+    <p class="small" style="margin-bottom:0">「送信完了」になったら、クラス全体の結果を見てみましょう。あなたの理由がAIにどう分類されたかも、下に出ます。</p>
+  </div>
+  <div id="my-ai"></div>
+  <div style="margin:18px 0"><a class="btn primary" id="to-results" href="results.html" style="text-decoration:none;display:inline-block">クラスの結果を見る ▶</a></div>
+</div></section>
+
+<script src="lib/three.min.js"></script>
+<script src="config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/characters.js"></script>
+<script src="js/world.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
